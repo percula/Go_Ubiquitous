@@ -36,12 +36,22 @@ import com.example.android.sunshine.app.R;
 import com.example.android.sunshine.app.Utility;
 import com.example.android.sunshine.app.data.WeatherContract;
 import com.example.android.sunshine.app.muzei.WeatherMuzeiSource;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.wearable.Asset;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.PutDataMapRequest;
+import com.google.android.gms.wearable.PutDataRequest;
+import com.google.android.gms.wearable.Wearable;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -52,7 +62,10 @@ import java.net.URL;
 import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
-public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
+public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
+        DataApi.DataListener,
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener {
     public final String LOG_TAG = SunshineSyncAdapter.class.getSimpleName();
     public static final String ACTION_DATA_UPDATED =
             "com.example.android.sunshine.app.ACTION_DATA_UPDATED";
@@ -86,6 +99,14 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
     public static final int LOCATION_STATUS_SERVER_INVALID = 2;
     public static final int LOCATION_STATUS_UNKNOWN = 3;
     public static final int LOCATION_STATUS_INVALID = 4;
+
+    private GoogleApiClient mGoogleApiClient;
+    private static final String WEARABLE_PATH = "/sunshine_watchface";
+    private static final String HIGH_TEMP_KEY = "high_temp";
+    private static final String LOW_TEMP_KEY = "high_temp";
+    private static final String WEATHER_ID_KEY = "weather_id";
+    private static final String ART_KEY = "art_key";
+
 
     public SunshineSyncAdapter(Context context, boolean autoInitialize) {
         super(context, autoInitialize);
@@ -368,6 +389,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
 
                 updateWidgets();
                 updateMuzei();
+                updateWatch();
                 notifyWeather();
             }
             Log.d(LOG_TAG, "Sync Complete. " + cVVector.size() + " Inserted");
@@ -386,6 +408,116 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
         Intent dataUpdatedIntent = new Intent(ACTION_DATA_UPDATED)
                 .setPackage(context.getPackageName());
         context.sendBroadcast(dataUpdatedIntent);
+    }
+
+    private void updateWatch() {
+        Log.v("updateWatch", "GO");
+        // Code to update the wear data layer
+
+        // Create the GoogleApiClient
+        mGoogleApiClient = new GoogleApiClient.Builder(getContext())
+                .addApi(Wearable.API)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .build();
+
+        mGoogleApiClient.connect();
+
+
+//        // Get list of connected devices
+//        List<Node> connectedNodes =
+//                Wearable.NodeApi.getConnectedNodes(mGoogleApiClient).await().getNodes();
+//        Log.v("updateWatch", "connectedNodes" + connectedNodes.size());
+//
+//        // If there is an android wear device connected, proceed with sync
+//        if (connectedNodes.size() > 0) {
+//        }
+    }
+
+    private static Asset createAssetFromBitmap(Bitmap bitmap) {
+        final ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteStream);
+        return Asset.createFromBytes(byteStream.toByteArray());
+    }
+
+    @Override
+    public void onConnected(Bundle bundle) {
+        Context context = getContext();
+
+        // Last sync was more than 1 day ago, let's send a notification with the weather.
+        String locationQuery = Utility.getPreferredLocation(context);
+
+        Uri weatherUri = WeatherContract.WeatherEntry.buildWeatherLocationWithDate(locationQuery, System.currentTimeMillis());
+
+        // we'll query our contentProvider, as always
+        Cursor cursor = context.getContentResolver().query(weatherUri, NOTIFY_WEATHER_PROJECTION, null, null, null);
+
+        if (cursor.moveToFirst()) {
+            int weatherId = cursor.getInt(INDEX_WEATHER_ID);
+            double high = cursor.getDouble(INDEX_MAX_TEMP);
+            double low = cursor.getDouble(INDEX_MIN_TEMP);
+            String desc = cursor.getString(INDEX_SHORT_DESC);
+
+            Resources resources = context.getResources();
+            int artResourceId = Utility.getArtResourceForWeatherCondition(weatherId);
+
+            // Retrieve the large icon
+            Bitmap largeIcon;
+//            int largeIconWidth = resources.getDimensionPixelSize(R.dimen.notification_large_icon_default);
+//            int largeIconHeight = resources.getDimensionPixelSize(R.dimen.notification_large_icon_default);
+//            try {
+//                largeIcon = Glide.with(context)
+//                        .load(artUrl)
+//                        .asBitmap()
+//                        .error(artResourceId)
+//                        .fitCenter()
+//                        .into(largeIconWidth, largeIconHeight).get();
+//            } catch (InterruptedException | ExecutionException e) {
+//                Log.e(LOG_TAG, "Error retrieving large icon from " + artUrl, e);
+//                largeIcon = BitmapFactory.decodeResource(resources, artResourceId);
+//            }
+            largeIcon = BitmapFactory.decodeResource(resources, artResourceId);
+
+            String highText = Utility.formatTemperature(context, high);
+            String lowText = Utility.formatTemperature(context, low);
+
+            // Add temperature data
+            Log.v("updateWatch", "onConnected: Putting Temp");
+            PutDataMapRequest putDataMapReq = PutDataMapRequest.create(WEARABLE_PATH);
+            putDataMapReq.getDataMap().putString(HIGH_TEMP_KEY, highText);
+            putDataMapReq.getDataMap().putString(LOW_TEMP_KEY, lowText);
+            putDataMapReq.getDataMap().putInt(WEATHER_ID_KEY, weatherId);
+            if (largeIcon != null) {
+                Asset asset = createAssetFromBitmap(largeIcon);
+                putDataMapReq.getDataMap().putAsset(ART_KEY,asset);
+            }
+            PutDataRequest putDataReq = putDataMapReq.asPutDataRequest();
+            putDataReq.setUrgent();
+            Wearable.DataApi.putDataItem(mGoogleApiClient, putDataReq)
+                    .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
+                        @Override
+                        public void onResult(DataApi.DataItemResult dataItemResult) {
+                            Log.d("updateWatch", "onConnected: Sending high was successful: " + dataItemResult.getStatus()
+                                    .isSuccess());
+                        }
+                    });
+        }
+        cursor.close();
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+
+    }
+
+    @Override
+    public void onDataChanged(DataEventBuffer dataEventBuffer) {
+
     }
 
     private void updateMuzei() {
