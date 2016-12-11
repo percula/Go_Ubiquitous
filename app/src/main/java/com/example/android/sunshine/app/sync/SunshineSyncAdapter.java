@@ -484,6 +484,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
             // Add temperature data
             Log.v("updateWatch", "onConnected: Putting Temp");
             PutDataMapRequest putDataMapReq = PutDataMapRequest.create(WEARABLE_PATH);
+            putDataMapReq.getDataMap().putLong("time", System.currentTimeMillis());
             putDataMapReq.getDataMap().putString(HIGH_TEMP_KEY, highText);
             putDataMapReq.getDataMap().putString(LOW_TEMP_KEY, lowText);
             putDataMapReq.getDataMap().putInt(WEATHER_ID_KEY, weatherId);
