@@ -144,7 +144,7 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
         private GoogleApiClient mGoogleApiClient;
         private static final String WEARABLE_PATH = "/sunshine_watchface";
         private static final String HIGH_TEMP_KEY = "high_temp";
-        private static final String LOW_TEMP_KEY = "high_temp";
+        private static final String LOW_TEMP_KEY = "low_temp";
         private static final String WEATHER_ID_KEY = "weather_id";
         private static final String ART_KEY = "art_key";
         private final long TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
