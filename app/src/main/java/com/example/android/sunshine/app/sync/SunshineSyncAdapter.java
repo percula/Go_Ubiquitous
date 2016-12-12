@@ -41,7 +41,6 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
-import com.google.android.gms.wearable.DataEventBuffer;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
@@ -63,7 +62,6 @@ import java.util.Vector;
 import java.util.concurrent.ExecutionException;
 
 public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
-        DataApi.DataListener,
         GoogleApiClient.ConnectionCallbacks,
         GoogleApiClient.OnConnectionFailedListener {
     public final String LOG_TAG = SunshineSyncAdapter.class.getSimpleName();
@@ -102,9 +100,10 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
 
     private GoogleApiClient mGoogleApiClient;
     private static final String WEARABLE_PATH = "/sunshine_watchface";
+    private static final String UPDATE_PATH = "sunshine_watchface_update";
     private static final String HIGH_TEMP_KEY = "high_temp";
     private static final String LOW_TEMP_KEY = "low_temp";
-    private static final String WEATHER_ID_KEY = "weather_id";
+    private static final String UPDATE_KEY = "update";
     private static final String ART_KEY = "art_key";
 
 
@@ -442,6 +441,10 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
 
     @Override
     public void onConnected(Bundle bundle) {
+        if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
+            Log.d(LOG_TAG, "onConnectedSyncAdapter: " + bundle);
+        }
+
         Context context = getContext();
 
         // Last sync was more than 1 day ago, let's send a notification with the weather.
@@ -487,7 +490,6 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
             putDataMapReq.getDataMap().putLong("time", System.currentTimeMillis());
             putDataMapReq.getDataMap().putString(HIGH_TEMP_KEY, highText);
             putDataMapReq.getDataMap().putString(LOW_TEMP_KEY, lowText);
-            putDataMapReq.getDataMap().putInt(WEATHER_ID_KEY, weatherId);
             if (largeIcon != null) {
                 Asset asset = createAssetFromBitmap(largeIcon);
                 putDataMapReq.getDataMap().putAsset(ART_KEY,asset);
@@ -508,17 +510,16 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter implements
 
     @Override
     public void onConnectionSuspended(int i) {
-
+        if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
+            Log.d(LOG_TAG, "onConnectionSuspendedSyncAdapter: " + i);
+        }
     }
 
     @Override
     public void onConnectionFailed(ConnectionResult connectionResult) {
-
-    }
-
-    @Override
-    public void onDataChanged(DataEventBuffer dataEventBuffer) {
-
+        if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
+            Log.d(LOG_TAG, "onConnectionFailedSyncAdapter: " + connectionResult);
+        }
     }
 
     private void updateMuzei() {

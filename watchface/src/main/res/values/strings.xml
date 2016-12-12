@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name">002 Sunshine</string>
-    <string name="message">Watch face tapped</string>
-    <string name="my_digital_name">002 Sunshine</string>
+    <string name="app_name">Sunshine</string>
+    <string name="watchface_name">Sunshine</string>
 </resources>
